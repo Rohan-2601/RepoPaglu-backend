@@ -7,34 +7,54 @@ export const apiDocsController = async (req, res) => {
 
   try {
     const { repo } = req.body;
-    if (!repo) return res.status(400).json({ error: "Missing repo URL" });
+    if (!repo) {
+      return res.status(400).json({
+        success: false,
+        message: "Missing repo URL",
+      });
+    }
 
+    // Clone repository
     repoPath = await cloneRepo(repo);
 
-    // Extract code files
+    // Extract files
     const files = await extractAndFilterFiles(repoPath);
 
-    // Extract controller details
+    // Extract controllers
     const controllers = extractControllerInfo(files);
 
     if (!controllers.length) {
       return res.status(400).json({
-        error: "No controllers found to document."
+        success: false,
+        message: "No controllers found to document.",
       });
     }
 
-    // Generate docs
+    // Generate API documentation
     const docs = await generateApiDocs(controllers);
 
-    return res.json({
+    return res.status(200).json({
       success: true,
-      docs
+      docs,
     });
 
   } catch (err) {
-    console.error("API Docs Error:", err.message);
-    return res.status(500).json({ error: err.message });
+    console.error("API Docs Error:", err);
+
+    // Handle structured errors thrown by services
+    const status = err.status || 500;
+
+    return res.status(status).json({
+      success: false,
+      message: err.message || "Something went wrong while generating API docs.",
+    });
+
   } finally {
-    if (repoPath) await cleanupTemp(repoPath);
+    if (repoPath) {
+      await cleanupTemp(repoPath).catch(() => {
+        console.error("Cleanup failed.");
+      });
+    }
   }
 };
+

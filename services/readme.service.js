@@ -31,12 +31,36 @@ ${summaryText}
 Begin now:
   `.trim();
 
-  const result = await model.generateContent(prompt);
-  let content = result.response.text();
+  try {
+    const result = await model.generateContent(prompt);
+    let content = result.response.text();
 
-// Remove ```markdown and ``` wrappers if present
-content = content.replace(/```markdown/gi, "").replace(/```/g, "").trim();
+    // Clean code fences
+    content = content
+      .replace(/```markdown/gi, "")
+      .replace(/```/g, "")
+      .trim();
 
-return content;
+    return content;
 
+  } catch (error) {
+
+    // Gemini 429 — Most common with Flash model
+    if (error.status === 429 || error?.message?.includes("429")) {
+      console.error("⚠️ Gemini Rate Limit Hit:", error.message);
+
+      throw {
+        status: 429,
+        message: "AI is overloaded. Please retry in a few seconds.",
+      };
+    }
+
+    // Other unexpected issues
+    console.error("🔥 Gemini README Generator Error:", error);
+
+    throw {
+      status: 500,
+      message: "Failed to generate README due to an internal AI error.",
+    };
+  }
 }

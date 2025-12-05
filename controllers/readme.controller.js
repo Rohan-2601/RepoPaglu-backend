@@ -9,34 +9,53 @@ export const readmeController = async (req, res) => {
 
   try {
     const { repo } = req.body;
-    if (!repo) return res.status(400).json({ error: "Missing 'repo' field." });
 
+    if (!repo) {
+      return res.status(400).json({
+        success: false,
+        message: "Missing 'repo' field."
+      });
+    }
+
+    // Clone repository
     repoPath = await cloneRepo(repo);
 
-    // Extract files
+    // Extract project files
     const files = await extractAndFilterFiles(repoPath);
 
-    // Build graph
+    // Build dependency graph
     const dependencyGraph = buildDependencyGraph(files, repoPath);
 
-    // Summaries
+    // Generate summaries per file
     const summaries = {};
     for (const file of files) {
       summaries[file.relative] = generateSummary(file, dependencyGraph);
     }
 
-    // Generate README content
+    // Generate README content (AI call)
     const readme = await generateReadmeContent(files, summaries);
 
-    return res.json({
+    return res.status(200).json({
       success: true,
       readme
     });
 
   } catch (err) {
-    console.error("README Error:", err.message);
-    return res.status(500).json({ error: err.message });
+    console.error("README Generation Error:", err);
+
+    const status = err.status || 500;
+    const message = err.message || "Something went wrong while generating the README.";
+
+    return res.status(status).json({
+      success: false,
+      message
+    });
+
   } finally {
-    if (repoPath) await cleanupTemp(repoPath);
+    if (repoPath) {
+      await cleanupTemp(repoPath).catch(() => {
+        console.error("Cleanup failed during README generation.");
+      });
+    }
   }
 };

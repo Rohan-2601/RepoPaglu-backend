@@ -15,77 +15,98 @@ export const generateController = async (req, res) => {
     const { repo } = req.body;
 
     if (!repo) {
-      return res.status(400).json({ error: "Missing 'repo' field." });
+      return res.status(400).json({
+        success: false,
+        message: "Missing 'repo' field."
+      });
     }
 
     console.log("⚡ Received repo:", repo);
 
-
+    // Clone the repository
     repoPath = await cloneRepo(repo);
 
-    
+    // Extract valid project files
     const files = await extractAndFilterFiles(repoPath);
     console.log(`📄 Filtered files: ${files.length}`);
 
     if (files.length === 0) {
-      return res.status(400).json({ error: "No valid source files found." });
+      return res.status(400).json({
+        success: false,
+        message: "No valid source files found."
+      });
     }
 
-    // 3️⃣ Build dependency graph
+    // Build dependency graph
     const dependencyGraph = buildDependencyGraph(files, repoPath);
 
-    // 4️⃣ Generate summaries
+    // Generate summaries per file
     console.log("📝 Creating summaries...");
     const summaries = {};
     for (const file of files) {
       summaries[file.relative] = generateSummary(file, dependencyGraph);
     }
 
-    // 5️⃣ Create lightweight embedding store
+    // Embedding store
     console.log("🧠 Indexing summaries...");
     const store = new EmbeddingStore();
     for (const file of files) {
       await store.add(file.relative, summaries[file.relative]);
     }
 
-    // 6️⃣ RAG Engine
+    // RAG Engine
     console.log("🔍 Initializing RAG engine...");
     const rag = new RagEngine(store, dependencyGraph);
 
-    // 7️⃣ Batching
+    // Batcher
     console.log("📦 Creating batches...");
     const batcher = new Batcher(files, summaries, rag);
     const batches = await batcher.createBatches();
     console.log(`📦 Total batches: ${batches.length}`);
 
-    // 8️⃣ LLM test generation
+    // Test generation (LLM)
     console.log("🤖 Generating tests...");
     const generator = new TestGenerator(batches);
     const testFiles = await generator.run();
 
     if (testFiles.length === 0) {
-      return res.status(500).json({ error: "LLM generated no test files." });
+      return res.status(500).json({
+        success: false,
+        message: "AI failed to generate test files."
+      });
     }
 
-    // 9️⃣ Create ZIP in memory
+    // Create zip buffer
     const zipBuffer = await createZipBuffer(testFiles);
 
-    // 🔟 Return ZIP as direct download (no file saved)
+    // Send ZIP
     res.set({
       "Content-Type": "application/zip",
-      "Content-Disposition": `attachment; filename="tests.zip"`,
+      "Content-Disposition": `attachment; filename="tests.zip"`
     });
 
-    return res.send(zipBuffer);
+    return res.status(200).send(zipBuffer);
 
-  } catch (error) {
-    console.error("❌ Controller Error:", error);
-    return res.status(500).json({ error: error.message });
+  } catch (err) {
+    console.error("❌ Test Generation Controller Error:", err);
+
+    // Respect structured errors from AI service
+    const status = err.status || 500;
+
+    return res.status(status).json({
+      success: false,
+      message: err.message || "Something went wrong during test generation."
+    });
+
   } finally {
-    // 🧹 Cleanup temp folder always
-    if (repoPath) await cleanupTemp(repoPath);
+    if (repoPath) {
+      await cleanupTemp(repoPath).catch(() => {
+        console.error("🧹 Temp cleanup failed during test generation.");
+      });
+    }
   }
 };
+
 
 
 

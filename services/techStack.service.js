@@ -60,23 +60,48 @@ ${projectFiles
   .join("\n\n-----\n\n")}
 `;
 
-  const result = await model.generateContent(prompt);
-  let text = result.response.text().trim();
-
-  // Remove accidental code fences
-  text = text
-    .replace(/```json/gi, "")
-    .replace(/```/g, "")
-    .trim();
-
-  // Parse JSON safely
-  let data;
   try {
-    data = JSON.parse(text);
-  } catch (err) {
-    console.error("❌ Gemini returned invalid JSON:", text);
-    throw new Error("Gemini returned invalid JSON for tech stack.");
-  }
+    const result = await model.generateContent(prompt);
+    let text = result.response.text().trim();
 
-  return data;
+    // Remove accidental code fences
+    text = text
+      .replace(/```json/gi, "")
+      .replace(/```/g, "")
+      .trim();
+
+    // Try parsing JSON
+    let data;
+    try {
+      data = JSON.parse(text);
+    } catch (err) {
+      console.error("❌ Gemini returned invalid JSON:", text);
+      throw {
+        status: 500,
+        message: "AI returned invalid JSON for tech stack.",
+      };
+    }
+
+    return data;
+
+  } catch (error) {
+    // Handle specific Gemini rate limit error
+    if (error.status === 429 || error?.message?.includes("429")) {
+      console.error("⚠️ Gemini rate limit hit:", error.message);
+
+      throw {
+        status: 429,
+        message: "AI is receiving too many requests. Please try again shortly.",
+      };
+    }
+
+    // Handle unknown errors
+    console.error("🔥 Gemini API Error:", error);
+
+    throw {
+      status: 500,
+      message: "AI service failed unexpectedly.",
+    };
+  }
 }
+

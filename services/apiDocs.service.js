@@ -56,12 +56,11 @@ Return a JSON array. Each item must be:
 }
 
 ### EXTRA RULES
-- RETURN ONLY VALID JSON. NO MARKDOWN. NO code fences.
-- If authentication middleware is detected on a route, set authRequired=true.
-- Infer request body fields based on validator usage or destructuring.
-- Extract ALL Express routes: router.get(), router.post(), router.put(), router.delete()
-- Skip no routes.
-- Use best professional descriptions based on code.
+- RETURN ONLY VALID JSON. NO MARKDOWN.
+- If authentication middleware is found, authRequired=true.
+- Extract ALL Express routes.
+- Infer params/body/query from destructuring.
+- Skip nothing.
 
 ### CONTROLLER FILES:
 ${controllerData
@@ -69,30 +68,57 @@ ${controllerData
   .join("\n\n---\n\n")}
 `.trim();
 
-  // Generate response
-  const result = await model.generateContent(prompt);
-  let text = result.response.text().trim();
-
-  // Clean accidental code fences if present
-  text = text
-    .replace(/```json/gi, "")
-    .replace(/```/g, "")
-    .trim();
-
-  // Safely parse JSON
-  let json;
   try {
-    json = JSON.parse(text);
-  } catch (err) {
-    console.error("❌ Gemini returned invalid JSON:", text);
-    throw new Error("Gemini returned invalid JSON for API docs.");
-  }
+    // Call Gemini
+    const result = await model.generateContent(prompt);
+    let text = result.response.text().trim();
 
-  // Ensure always returns array
-  if (!Array.isArray(json)) {
-    throw new Error("Gemini did not return a JSON array for API docs.");
-  }
+    // Clean accidental fences
+    text = text
+      .replace(/```json/gi, "")
+      .replace(/```/g, "")
+      .trim();
 
-  return json;
+    // Parse JSON safely
+    let json;
+    try {
+      json = JSON.parse(text);
+    } catch (err) {
+      console.error("❌ Gemini returned invalid JSON:", text);
+      throw {
+        status: 500,
+        message: "AI returned invalid JSON for API documentation."
+      };
+    }
+
+    // Validate structure
+    if (!Array.isArray(json)) {
+      throw {
+        status: 500,
+        message: "AI did not return a JSON array for API documentation."
+      };
+    }
+
+    return json;
+
+  } catch (error) {
+    // Handle rate limit
+    if (error.status === 429 || error?.message?.includes("429")) {
+      console.error("⚠️ Gemini Rate Limit Hit:", error.message);
+
+      throw {
+        status: 429,
+        message: "AI is rate-limited. Try again in a few seconds."
+      };
+    }
+
+    // Unknown errors
+    console.error("🔥 Gemini API Error (API Docs):", error);
+
+    throw {
+      status: 500,
+      message: "AI service failed while generating API documentation."
+    };
+  }
 }
 
