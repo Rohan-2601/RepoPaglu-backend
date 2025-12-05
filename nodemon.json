@@ -1,0 +1,5 @@
+{
+  "watch": ["src"],
+  "ignore": ["storage", "output"],
+  "ext": "js,json"
+}

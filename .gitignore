@@ -1,0 +1,67 @@
+# === Node ===
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# === Environment Variables ===
+.env
+.env.local
+.env.development
+.env.production
+.env.test
+.env.*.local
+
+# === Next.js Build Output ===
+.next/
+out/
+.next/cache/
+
+# === Logs ===
+logs/
+*.log
+*.pid
+*.seed
+*.pid.lock
+
+# === OS / Editor Junk ===
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# === TypeScript ===
+*.tsbuildinfo
+
+# === Build Artifacts ===
+dist/
+build/
+
+# === Temporary Folders ===
+tmp/
+temp/
+.cache/
+coverage/
+
+# === Uploads ===
+uploads/
+public/uploads/
+
+# === MongoDB Dumps ===
+dump/
+
+# === Local Data Caches ===
+*.local.db
+*.local.sqlite
+
+# === Sensitive Files You Should Never Commit ===
+/config/*.json
+/secrets/
+keys/
+private/
+
+# === Misc ===
+*.swp
+
+# === Local Storage ===
+storage/
