@@ -3,7 +3,7 @@ export class Batcher {
     this.files = files;
     this.summaries = summaries;
     this.rag = ragEngine;
-    this.batchSize = 8;
+    this.batchSize = 3;
   }
 
   async createBatches() {

@@ -1,4 +1,5 @@
-import { generateTestsForBatch } from "../llm/gemini.js";
+import { generateTestsForBatch } from "../llm/groq.js";
+
 
 export class TestGenerator {
   constructor(batches) {
