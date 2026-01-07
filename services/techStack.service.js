@@ -1,7 +1,4 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
-import { GEMINI_KEY } from "../config/env.js";
-
-const genAI = new GoogleGenerativeAI(GEMINI_KEY);
+import { generateWithHF } from "../llm/groq.js";
 
 /**
  * Collect content from project files
@@ -14,17 +11,13 @@ export function collectProjectFiles(files) {
 }
 
 /**
- * Generate STRUCTURED TECH STACK REPORT
+ * Generate STRUCTURED TECH STACK REPORT using Hugging Face
  */
 export async function generateTechStackReport(projectFiles) {
-  const model = genAI.getGenerativeModel({
-    model: "gemini-2.0-flash"
-  });
-
   const prompt = `
 You are a senior software architect.
 
-Analyze the following project files and return a **STRICT JSON OBJECT** describing the project's tech stack.
+Analyze the following project files and return a STRICT JSON OBJECT describing the project's tech stack.
 
 ### OUTPUT FORMAT (STRICT JSON ONLY):
 {
@@ -56,26 +49,27 @@ Analyze the following project files and return a **STRICT JSON OBJECT** describi
 
 ### PROJECT FILES:
 ${projectFiles
-  .map(p => `FILE: ${p.file}\n\n${p.content}`)
+  .map(
+    p =>
+      `FILE: ${p.file}\nSUMMARY:\n${p.summary || "No summary available"}`
+  )
   .join("\n\n-----\n\n")}
-`;
+`.trim();
 
   try {
-    const result = await model.generateContent(prompt);
-    let text = result.response.text().trim();
+    let text = await generateWithHF(prompt);
 
-    // Remove accidental code fences
+    // Clean accidental fences
     text = text
       .replace(/```json/gi, "")
       .replace(/```/g, "")
       .trim();
 
-    // Try parsing JSON
     let data;
     try {
       data = JSON.parse(text);
-    } catch (err) {
-      console.error("❌ Gemini returned invalid JSON:", text);
+    } catch {
+      console.error("❌ AI returned invalid JSON for tech stack:", text);
       throw {
         status: 500,
         message: "AI returned invalid JSON for tech stack.",
@@ -85,23 +79,11 @@ ${projectFiles
     return data;
 
   } catch (error) {
-    // Handle specific Gemini rate limit error
-    if (error.status === 429 || error?.message?.includes("429")) {
-      console.error("⚠️ Gemini rate limit hit:", error.message);
-
-      throw {
-        status: 429,
-        message: "AI is receiving too many requests. Please try again shortly.",
-      };
-    }
-
-    // Handle unknown errors
-    console.error("🔥 Gemini API Error:", error);
+    console.error("🔥 AI service failed while generating tech stack:", error);
 
     throw {
       status: 500,
-      message: "AI service failed unexpectedly.",
+      message: "AI service failed while generating tech stack.",
     };
   }
 }
-

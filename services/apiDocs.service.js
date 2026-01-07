@@ -1,7 +1,4 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
-import { GEMINI_KEY } from "../config/env.js";
-
-const genAI = new GoogleGenerativeAI(GEMINI_KEY);
+import { generateWithHF } from "../llm/groq.js";
 
 /**
  * Extract controllers from project files.
@@ -17,14 +14,10 @@ export function extractControllerInfo(files) {
 }
 
 /**
- * Generate STRUCTURED JSON API documentation using Gemini.
+ * Generate STRUCTURED JSON API documentation using AI
  * Returns: Array of controllers and their routes
  */
 export async function generateApiDocs(controllerData) {
-  const model = genAI.getGenerativeModel({
-    model: "gemini-2.0-flash"
-  });
-
   const prompt = `
 You are an API documentation extractor.
 
@@ -55,7 +48,7 @@ Return a JSON array. Each item must be:
   ]
 }
 
-### EXTRA RULES
+### RULES
 - RETURN ONLY VALID JSON. NO MARKDOWN.
 - If authentication middleware is found, authRequired=true.
 - Extract ALL Express routes.
@@ -69,29 +62,35 @@ ${controllerData
 `.trim();
 
   try {
-    // Call Gemini
-    const result = await model.generateContent(prompt);
-    let text = result.response.text().trim();
+    let text = await generateWithHF(prompt);
 
-    // Clean accidental fences
+    // Remove markdown fences if any
     text = text
       .replace(/```json/gi, "")
       .replace(/```/g, "")
       .trim();
 
-    // Parse JSON safely
     let json;
     try {
-      json = JSON.parse(text);
+      // ✅ ROBUST FIX: extract JSON array only
+      const start = text.indexOf("[");
+      const end = text.lastIndexOf("]");
+
+      if (start === -1 || end === -1) {
+        throw new Error("No JSON array found in AI response");
+      }
+
+      const extractedJson = text.slice(start, end + 1);
+      json = JSON.parse(extractedJson);
+
     } catch (err) {
-      console.error("❌ Gemini returned invalid JSON:", text);
+      console.error("❌ Failed to parse API docs JSON:", text);
       throw {
         status: 500,
-        message: "AI returned invalid JSON for API documentation."
+        message: "AI returned malformed JSON for API documentation."
       };
     }
 
-    // Validate structure
     if (!Array.isArray(json)) {
       throw {
         status: 500,
@@ -102,18 +101,7 @@ ${controllerData
     return json;
 
   } catch (error) {
-    // Handle rate limit
-    if (error.status === 429 || error?.message?.includes("429")) {
-      console.error("⚠️ Gemini Rate Limit Hit:", error.message);
-
-      throw {
-        status: 429,
-        message: "AI is rate-limited. Try again in a few seconds."
-      };
-    }
-
-    // Unknown errors
-    console.error("🔥 Gemini API Error (API Docs):", error);
+    console.error("🔥 AI service failed while generating API docs:", error);
 
     throw {
       status: 500,
@@ -121,4 +109,3 @@ ${controllerData
     };
   }
 }
-
